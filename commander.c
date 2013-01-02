@@ -5,6 +5,8 @@
 
 #define COMMANDER_OPTION_DELIMITER "--"
 
+static int _commander_handle(int, char **, struct commander *);
+
 static int is_option_delimiter(char *option)
 {
 	return !strcmp(option, COMMANDER_OPTION_DELIMITER);
@@ -93,6 +95,37 @@ static int handle_options(int *argc_ptr,
 	return result;
 }
 
+int commander_group_handler(int *argc_ptr, char ***argv_ptr, void *data_ptr)
+{
+	char *command = **argv_ptr;
+	void **element_ptr = data_ptr;
+	int result;
+
+	if (!*argc_ptr) {
+		goto not_found;
+	}
+
+	while (*element_ptr) {
+		char *handler_name = *element_ptr++;
+		void *handler_data = *element_ptr++;
+
+		if (strcmp(command, handler_name) == 0) {
+			(*argc_ptr)--;
+			(*argv_ptr)++;
+			result = _commander_handle(*argc_ptr,
+					*argv_ptr,
+					handler_data);
+			goto out;
+		}
+	}
+
+not_found:
+	result = -1;
+
+out:
+	return result;
+}
+
 int commander_command_handler(int *argc_ptr, char ***argv_ptr, void *data_ptr)
 {
 	struct commander_command *command_ptr = data_ptr;
@@ -115,11 +148,19 @@ int commander_flag_handler(int *argc_ptr, char ***argv_ptr, void *flag_ptr)
 	return 1;
 }
 
-int commander_handle(int argc, char **argv, struct commander *commander_ptr)
+int _commander_handle(int argc, char **argv, struct commander *commander_ptr)
 {
-	int argc_copy = argc;
-	char **argv_copy = argv + 1;
-	return commander_ptr->handler(&argc_copy,
+	int argc_copy = argc, result = -1;
+	char **argv_copy = argv;
+
+	result = commander_ptr->handler(&argc_copy,
 		&argv_copy,
 		commander_ptr->data);
+
+	return result;
+}
+
+int commander_handle(int argc, char **argv, struct commander *commander_ptr)
+{
+	return _commander_handle(argc - 1, argv + 1, commander_ptr);
 }
